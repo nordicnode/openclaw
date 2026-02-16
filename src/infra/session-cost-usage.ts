@@ -164,20 +164,29 @@ const parseTranscriptEntry = (entry: Record<string, unknown>): ParsedTranscriptE
 const formatDayKey = (date: Date): string =>
   date.toLocaleDateString("en-CA", { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone });
 
-const computeLatencyStats = (values: number[]): SessionLatencyStats | undefined => {
-  if (!values.length) {
+const computeLatencyStats = (
+  entries: Array<{ ms: number; outputTokens: number; totalTokens: number }>,
+): SessionLatencyStats | undefined => {
+  if (!entries.length) {
     return undefined;
   }
-  const sorted = values.toSorted((a, b) => a - b);
-  const total = sorted.reduce((sum, v) => sum + v, 0);
-  const count = sorted.length;
+  const msValues = entries.map((e) => e.ms).toSorted((a, b) => a - b);
+  const totalMs = msValues.reduce((sum, v) => sum + v, 0);
+  const totalOutputTokens = entries.reduce((sum, e) => sum + e.outputTokens, 0);
+  const totalTokens = entries.reduce((sum, e) => sum + e.totalTokens, 0);
+  const count = entries.length;
   const p95Index = Math.max(0, Math.ceil(count * 0.95) - 1);
+
+  const durationSec = totalMs / 1000;
+
   return {
     count,
-    avgMs: total / count,
-    p95Ms: sorted[p95Index] ?? sorted[count - 1],
-    minMs: sorted[0],
-    maxMs: sorted[count - 1],
+    avgMs: totalMs / count,
+    p95Ms: msValues[p95Index] ?? msValues[count - 1],
+    minMs: msValues[0],
+    maxMs: msValues[count - 1],
+    avgOutputTokenRate: durationSec > 0 ? totalOutputTokens / durationSec : undefined,
+    avgTotalTokenRate: durationSec > 0 ? totalTokens / durationSec : undefined,
   };
 };
 
@@ -483,7 +492,10 @@ export async function loadSessionCostSummary(params: {
   const activityDatesSet = new Set<string>();
   const dailyMap = new Map<string, { tokens: number; cost: number }>();
   const dailyMessageMap = new Map<string, SessionDailyMessageCounts>();
-  const dailyLatencyMap = new Map<string, number[]>();
+  const dailyLatencyMap = new Map<
+    string,
+    Array<{ ms: number; outputTokens: number; totalTokens: number }>
+  >();
   const dailyModelUsageMap = new Map<string, SessionDailyModelUsage>();
   const messageCounts: SessionMessageCounts = {
     total: 0,
@@ -496,7 +508,7 @@ export async function loadSessionCostSummary(params: {
   const toolUsageMap = new Map<string, number>();
   const modelUsageMap = new Map<string, SessionModelUsage>();
   const errorStopReasons = new Set(["error", "aborted", "timeout"]);
-  const latencyValues: number[] = [];
+  const latencyEntries: Array<{ ms: number; outputTokens: number; totalTokens: number }> = [];
   let lastUserTimestamp: number | undefined;
   const MAX_LATENCY_MS = 12 * 60 * 60 * 1000;
 
@@ -543,10 +555,13 @@ export async function loadSessionCostSummary(params: {
             Number.isFinite(latencyMs) &&
             latencyMs <= MAX_LATENCY_MS
           ) {
-            latencyValues.push(latencyMs);
+            const outputTokens = entry.usage?.output ?? 0;
+            const totalTokens = entry.usage?.total ?? 0;
+            const entryData = { ms: latencyMs, outputTokens, totalTokens };
+            latencyEntries.push(entryData);
             const dayKey = formatDayKey(entry.timestamp ?? new Date(ts));
             const dailyLatencies = dailyLatencyMap.get(dayKey) ?? [];
-            dailyLatencies.push(latencyMs);
+            dailyLatencies.push(entryData);
             dailyLatencyMap.set(dayKey, dailyLatencies);
           }
         }
@@ -679,8 +694,8 @@ export async function loadSessionCostSummary(params: {
   ).toSorted((a, b) => a.date.localeCompare(b.date));
 
   const dailyLatency: SessionDailyLatency[] = Array.from(dailyLatencyMap.entries())
-    .map(([date, values]) => {
-      const stats = computeLatencyStats(values);
+    .map(([date, entries]) => {
+      const stats = computeLatencyStats(entries);
       if (!stats) {
         return null;
       }
@@ -730,7 +745,7 @@ export async function loadSessionCostSummary(params: {
     messageCounts,
     toolUsage,
     modelUsage,
-    latency: computeLatencyStats(latencyValues),
+    latency: computeLatencyStats(latencyEntries),
     ...totals,
   };
 }

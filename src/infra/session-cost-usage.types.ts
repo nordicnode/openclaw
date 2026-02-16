@@ -80,6 +80,8 @@ export type SessionLatencyStats = {
   p95Ms: number;
   minMs: number;
   maxMs: number;
+  avgOutputTokenRate?: number; // tokens/sec
+  avgTotalTokenRate?: number; // tokens/sec
 };
 
 export type SessionDailyLatency = SessionLatencyStats & {

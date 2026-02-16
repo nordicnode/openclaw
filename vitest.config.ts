@@ -82,7 +82,6 @@ export default defineConfig({
 
         // Large integration surfaces; validated via e2e/manual/contract tests.
         "src/acp/**",
-        "src/agents/**",
         "src/channels/**",
         "src/gateway/**",
         "src/line/**",
@@ -91,22 +90,23 @@ export default defineConfig({
         "src/plugins/**",
         "src/providers/**",
 
-        // Some agent integrations are intentionally validated via manual/e2e runs.
+        // Integration-heavy agent modules.
         "src/agents/model-scan.ts",
-        "src/agents/pi-embedded-runner.ts",
-        "src/agents/sandbox-paths.ts",
+        "src/agents/pi-embedded-runner/run.ts",
+        "src/agents/pi-embedded-runner/runs.ts",
+        "src/agents/pi-embedded-runner/compact.ts",
         "src/agents/sandbox.ts",
         "src/agents/skills-install.ts",
+        "src/agents/pi-embedded-subscribe.ts",
+        "src/agents/openclaw-tools.ts",
+        "src/agents/sandbox-paths.ts",
         "src/agents/pi-tool-definition-adapter.ts",
         "src/agents/tools/discord-actions*.ts",
         "src/agents/tools/slack-actions.ts",
 
         // Hard-to-unit-test modules; exercised indirectly by integration tests.
-        "src/infra/state-migrations.ts",
         "src/infra/skills-remote.ts",
-        "src/infra/update-check.ts",
         "src/infra/ports-inspect.ts",
-        "src/infra/outbound/outbound-session.ts",
         "src/memory/batch-gemini.ts",
 
         // Gateway server integration surfaces are intentionally validated via manual/e2e runs.

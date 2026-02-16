@@ -75,7 +75,7 @@ function isSurfaceGroupKey(key: string): boolean {
   return key.includes(":group:") || key.includes(":channel:");
 }
 
-function isLegacyGroupKey(key: string): boolean {
+export function isLegacyGroupKey(key: string): boolean {
   const trimmed = key.trim();
   if (!trimmed) {
     return false;
@@ -97,7 +97,7 @@ function isLegacyGroupKey(key: string): boolean {
   return false;
 }
 
-function canonicalizeSessionKeyForAgent(params: {
+export function canonicalizeSessionKeyForAgent(params: {
   key: string;
   agentId: string;
   mainKey: string;
