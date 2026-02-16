@@ -2,6 +2,7 @@ import type { Client } from "@buape/carbon";
 import type { DiscordMessageEvent, DiscordMessageHandler } from "./listeners.js";
 import type { DiscordMessagePreflightParams } from "./message-handler.preflight.types.js";
 import { hasControlCommand } from "../../auto-reply/command-detection.js";
+import { summarizeInboundBatch } from "../../auto-reply/inbound-batch.js";
 import {
   createInboundDebouncer,
   resolveInboundDebounceMs,
@@ -55,31 +56,20 @@ export function createDiscordMessageHandler(
       return !hasControlCommand(baseText, params.cfg);
     },
     onFlush: async (entries) => {
-      const last = entries.at(-1);
-      if (!last) {
+      const summary = summarizeInboundBatch({
+        entries,
+        getText: (entry) =>
+          resolveDiscordMessageText(entry.data.message, { includeForwarded: false }),
+        getId: (entry) => entry.data.message?.id,
+      });
+      if (!summary) {
         return;
       }
-      if (entries.length === 1) {
-        const ctx = await preflightDiscordMessage({
-          ...params,
-          ackReactionScope,
-          groupPolicy,
-          data: last.data,
-          client: last.client,
-        });
-        if (!ctx) {
-          return;
-        }
-        await processDiscordMessage(ctx);
-        return;
-      }
-      const combinedBaseText = entries
-        .map((entry) => resolveDiscordMessageText(entry.data.message, { includeForwarded: false }))
-        .filter(Boolean)
-        .join("\n");
+
+      const { last, combinedText, ids } = summary;
       const syntheticMessage = {
         ...last.data.message,
-        content: combinedBaseText,
+        content: combinedText,
         attachments: [],
         message_snapshots: (last.data.message as { message_snapshots?: unknown }).message_snapshots,
         messageSnapshots: (last.data.message as { messageSnapshots?: unknown }).messageSnapshots,
@@ -101,18 +91,15 @@ export function createDiscordMessageHandler(
       if (!ctx) {
         return;
       }
-      if (entries.length > 1) {
-        const ids = entries.map((entry) => entry.data.message?.id).filter(Boolean) as string[];
-        if (ids.length > 0) {
-          const ctxBatch = ctx as typeof ctx & {
-            MessageSids?: string[];
-            MessageSidFirst?: string;
-            MessageSidLast?: string;
-          };
-          ctxBatch.MessageSids = ids;
-          ctxBatch.MessageSidFirst = ids[0];
-          ctxBatch.MessageSidLast = ids[ids.length - 1];
-        }
+      if (ids.length > 1) {
+        const ctxBatch = ctx as typeof ctx & {
+          MessageSids?: string[];
+          MessageSidFirst?: string;
+          MessageSidLast?: string;
+        };
+        ctxBatch.MessageSids = ids;
+        ctxBatch.MessageSidFirst = ids[0];
+        ctxBatch.MessageSidLast = ids[ids.length - 1];
       }
       await processDiscordMessage(ctx);
     },

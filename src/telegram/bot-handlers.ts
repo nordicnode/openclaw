@@ -4,6 +4,7 @@ import type { TelegramMediaRef } from "./bot-message-context.js";
 import type { TelegramContext } from "./bot/types.js";
 import { resolveDefaultAgentId } from "../agents/agent-scope.js";
 import { hasControlCommand } from "../auto-reply/command-detection.js";
+import { summarizeInboundBatch } from "../auto-reply/inbound-batch.js";
 import {
   createInboundDebouncer,
   resolveInboundDebounceMs,
@@ -141,18 +142,19 @@ export const registerTelegramHandlers = ({
       return !hasControlCommand(text, cfg, { botUsername: entry.botUsername });
     },
     onFlush: async (entries) => {
-      const last = entries.at(-1);
-      if (!last) {
+      const summary = summarizeInboundBatch({
+        entries,
+        getText: (entry) => entry.msg.text ?? entry.msg.caption ?? "",
+      });
+      if (!summary) {
         return;
       }
+
+      const { last, combinedText } = summary;
       if (entries.length === 1) {
         await processMessage(last.ctx, last.allMedia, last.storeAllowFrom);
         return;
       }
-      const combinedText = entries
-        .map((entry) => entry.msg.text ?? entry.msg.caption ?? "")
-        .filter(Boolean)
-        .join("\n");
       if (!combinedText.trim()) {
         return;
       }

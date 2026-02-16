@@ -1,6 +1,7 @@
 import type { AnyMessageContent, proto, WAMessage } from "@whiskeysockets/baileys";
 import { DisconnectReason, isJidGroup } from "@whiskeysockets/baileys";
 import type { WebInboundMessage, WebListenerCloseReason } from "./types.js";
+import { summarizeInboundBatch } from "../../auto-reply/inbound-batch.js";
 import { createInboundDebouncer } from "../../auto-reply/inbound-debounce.js";
 import { formatLocationText } from "../../channels/location.js";
 import { logVerbose, shouldLogVerbose } from "../../globals.js";
@@ -82,10 +83,16 @@ export async function monitorWebInbox(options: {
     },
     shouldDebounce: options.shouldDebounce,
     onFlush: async (entries) => {
-      const last = entries.at(-1);
-      if (!last) {
+      const summary = summarizeInboundBatch({
+        entries,
+        getText: (entry) => entry.body,
+        getId: (entry) => entry.id,
+      });
+      if (!summary) {
         return;
       }
+
+      const { last, combinedText } = summary;
       if (entries.length === 1) {
         await options.onMessage(last);
         return;
@@ -96,13 +103,9 @@ export async function monitorWebInbox(options: {
           mentioned.add(jid);
         }
       }
-      const combinedBody = entries
-        .map((entry) => entry.body)
-        .filter(Boolean)
-        .join("\n");
       const combinedMessage: WebInboundMessage = {
         ...last,
-        body: combinedBody,
+        body: combinedText,
         mentionedJids: mentioned.size > 0 ? Array.from(mentioned) : undefined,
       };
       await options.onMessage(combinedMessage);

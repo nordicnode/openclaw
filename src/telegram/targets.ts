@@ -5,25 +5,31 @@ export type TelegramTarget = {
 };
 
 export function stripTelegramInternalPrefixes(to: string): string {
+  const prefixes = ["telegram:", "tg:"];
   let trimmed = to.trim();
   let strippedTelegramPrefix = false;
+
   while (true) {
-    const next = (() => {
-      if (/^(telegram|tg):/i.test(trimmed)) {
+    let found = false;
+    const lower = trimmed.toLowerCase();
+    for (const prefix of prefixes) {
+      if (lower.startsWith(prefix)) {
+        trimmed = trimmed.slice(prefix.length).trim();
         strippedTelegramPrefix = true;
-        return trimmed.replace(/^(telegram|tg):/i, "").trim();
+        found = true;
+        break;
       }
-      // Legacy internal form: `telegram:group:<id>` (still emitted by session keys).
-      if (strippedTelegramPrefix && /^group:/i.test(trimmed)) {
-        return trimmed.replace(/^group:/i, "").trim();
-      }
-      return trimmed;
-    })();
-    if (next === trimmed) {
-      return trimmed;
     }
-    trimmed = next;
+    if (strippedTelegramPrefix && trimmed.toLowerCase().startsWith("group:")) {
+      trimmed = trimmed.slice("group:".length).trim();
+      found = true;
+    }
+    if (!found) {
+      break;
+    }
   }
+
+  return trimmed;
 }
 
 /**

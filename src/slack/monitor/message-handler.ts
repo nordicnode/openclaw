@@ -2,6 +2,7 @@ import type { ResolvedSlackAccount } from "../accounts.js";
 import type { SlackMessageEvent } from "../types.js";
 import type { SlackMonitorContext } from "./context.js";
 import { hasControlCommand } from "../../auto-reply/command-detection.js";
+import { summarizeInboundBatch } from "../../auto-reply/inbound-batch.js";
 import {
   createInboundDebouncer,
   resolveInboundDebounceMs,
@@ -55,18 +56,17 @@ export function createSlackMessageHandler(params: {
       return !hasControlCommand(textForCommandDetection, ctx.cfg);
     },
     onFlush: async (entries) => {
-      const last = entries.at(-1);
-      if (!last) {
+      const summary = summarizeInboundBatch({
+        entries,
+        getText: (entry) => entry.message.text ?? "",
+        getId: (entry) => entry.message.ts,
+        getWasMentioned: (entry) => entry.opts.wasMentioned,
+      });
+      if (!summary) {
         return;
       }
-      const combinedText =
-        entries.length === 1
-          ? (last.message.text ?? "")
-          : entries
-              .map((entry) => entry.message.text ?? "")
-              .filter(Boolean)
-              .join("\n");
-      const combinedMentioned = entries.some((entry) => Boolean(entry.opts.wasMentioned));
+
+      const { last, combinedText, ids, anyMentioned } = summary;
       const syntheticMessage: SlackMessageEvent = {
         ...last.message,
         text: combinedText,
@@ -77,19 +77,16 @@ export function createSlackMessageHandler(params: {
         message: syntheticMessage,
         opts: {
           ...last.opts,
-          wasMentioned: combinedMentioned || last.opts.wasMentioned,
+          wasMentioned: anyMentioned || last.opts.wasMentioned,
         },
       });
       if (!prepared) {
         return;
       }
-      if (entries.length > 1) {
-        const ids = entries.map((entry) => entry.message.ts).filter(Boolean) as string[];
-        if (ids.length > 0) {
-          prepared.ctxPayload.MessageSids = ids;
-          prepared.ctxPayload.MessageSidFirst = ids[0];
-          prepared.ctxPayload.MessageSidLast = ids[ids.length - 1];
-        }
+      if (ids.length > 1) {
+        prepared.ctxPayload.MessageSids = ids;
+        prepared.ctxPayload.MessageSidFirst = ids[0];
+        prepared.ctxPayload.MessageSidLast = ids[ids.length - 1];
       }
       await dispatchPreparedSlackMessage(prepared);
     },

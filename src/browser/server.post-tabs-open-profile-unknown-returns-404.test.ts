@@ -1,24 +1,14 @@
 import { fetch as realFetch } from "undici";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   getBrowserControlServerBaseUrl,
-  getBrowserControlServerTestState,
-  getCdpMocks,
-  getFreePort,
   installBrowserControlServerHooks,
-  makeResponse,
-  getPwMocks,
   startBrowserControlServerFromConfig,
-  stopBrowserControlServer,
 } from "./server.control-server.test-harness.js";
 
-const state = getBrowserControlServerTestState();
-const cdpMocks = getCdpMocks();
-const pwMocks = getPwMocks();
+installBrowserControlServerHooks();
 
 describe("browser control server", () => {
-  installBrowserControlServerHooks();
-
   it("POST /tabs/open?profile=unknown returns 404", async () => {
     await startBrowserControlServerFromConfig();
     const base = getBrowserControlServerBaseUrl();
@@ -35,45 +25,6 @@ describe("browser control server", () => {
 });
 
 describe("profile CRUD endpoints", () => {
-  beforeEach(async () => {
-    state.reachable = false;
-    state.cfgAttachOnly = false;
-
-    for (const fn of Object.values(pwMocks)) {
-      fn.mockClear();
-    }
-    for (const fn of Object.values(cdpMocks)) {
-      fn.mockClear();
-    }
-
-    state.testPort = await getFreePort();
-    state.cdpBaseUrl = `http://127.0.0.1:${state.testPort + 1}`;
-    state.prevGatewayPort = process.env.OPENCLAW_GATEWAY_PORT;
-    process.env.OPENCLAW_GATEWAY_PORT = String(state.testPort - 2);
-
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string) => {
-        const u = String(url);
-        if (u.includes("/json/list")) {
-          return makeResponse([]);
-        }
-        return makeResponse({}, { ok: false, status: 500, text: "unexpected" });
-      }),
-    );
-  });
-
-  afterEach(async () => {
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
-    if (state.prevGatewayPort === undefined) {
-      delete process.env.OPENCLAW_GATEWAY_PORT;
-    } else {
-      process.env.OPENCLAW_GATEWAY_PORT = state.prevGatewayPort;
-    }
-    await stopBrowserControlServer();
-  });
-
   it("validates profile create/delete endpoints", async () => {
     await startBrowserControlServerFromConfig();
     const base = getBrowserControlServerBaseUrl();

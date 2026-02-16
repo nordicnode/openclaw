@@ -57,3 +57,31 @@ export function requireTargetKind(params: {
   }
   return params.target.id;
 }
+
+/**
+ * Strip common channel prefixes like "slack:", "tg:", "telegram:", etc.
+ *
+ * @param to - The target string to strip.
+ * @param prefixes - Array of prefixes to strip (case-insensitive).
+ * @returns The stripped target string.
+ */
+export function stripChannelPrefixes(to: string, prefixes: string[]): string {
+  let trimmed = to.trim();
+  const lowerPrefixes = prefixes.map((p) => p.toLowerCase());
+
+  while (true) {
+    let found = false;
+    const lower = trimmed.toLowerCase();
+    for (const prefix of lowerPrefixes) {
+      if (lower.startsWith(prefix)) {
+        trimmed = trimmed.slice(prefix.length).trim();
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      break;
+    }
+  }
+  return trimmed;
+}

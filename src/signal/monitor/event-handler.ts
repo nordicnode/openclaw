@@ -7,6 +7,7 @@ import {
   formatInboundFromLabel,
   resolveEnvelopeFormatOptions,
 } from "../../auto-reply/envelope.js";
+import { summarizeInboundBatch } from "../../auto-reply/inbound-batch.js";
 import {
   createInboundDebouncer,
   resolveInboundDebounceMs,
@@ -48,6 +49,7 @@ import {
 } from "../identity.js";
 import { sendMessageSignal, sendReadReceiptSignal, sendTypingSignal } from "../send.js";
 import { renderSignalMentions } from "./mentions.js";
+
 export function createSignalEventHandler(deps: SignalEventHandlerDeps) {
   const inboundDebounceMs = resolveInboundDebounceMs({ cfg: deps.cfg, channel: "signal" });
 
@@ -286,18 +288,20 @@ export function createSignalEventHandler(deps: SignalEventHandlerDeps) {
       return !hasControlCommand(entry.bodyText, deps.cfg);
     },
     onFlush: async (entries) => {
-      const last = entries.at(-1);
-      if (!last) {
+      const summary = summarizeInboundBatch({
+        entries,
+        getText: (entry) => entry.bodyText,
+        separator: "\\n",
+      });
+      if (!summary) {
         return;
       }
+
+      const { last, combinedText } = summary;
       if (entries.length === 1) {
         await handleSignalInboundMessage(last);
         return;
       }
-      const combinedText = entries
-        .map((entry) => entry.bodyText)
-        .filter(Boolean)
-        .join("\\n");
       if (!combinedText.trim()) {
         return;
       }
